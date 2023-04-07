@@ -5,21 +5,22 @@
 {-# HLINT ignore "Use null" #-}
 {-# HLINT ignore "Use :" #-}
 {-# LANGUAGE BlockArguments #-}
+{-# HLINT ignore "Use list literal" #-}
+{-# OPTIONS_GHC -Wno-overlapping-patterns #-}
 
 import Data.String
 import Data.List
 import System.Environment
 import System.Exit
 import System.IO
+import Distribution.Simple.Command (OptDescr(BoolOpt))
 
 main :: IO ()
 main =
   do {
     args <- getArgs
-    ; print args
     ; if length args == 0 then print ("please put in an argument")
-    else print (latex_to_list (combine args) [])
-
+    else print (brackets_valid (latex_to_list (combine args) [] ) EmptyStack)
   }
 
 char_to_string :: Char -> String
@@ -52,17 +53,6 @@ string_equality s1 s2 =
             else string_equality xs ys
           )
   )
-
-test :: String
-test = "5+10\\times 6"
-
-special_chars :: [Char]
-special_chars =
-  ['/', '+', ' ', '-', '*', '\\', '^', '_', '{', '}', '[', ']', '(', ')']
-
-brackets :: [Char]
-brackets =
-  ['{', '}', '[', ']', '(', ')']
 
 operators :: [Char]
 operators = ['+', '-', '*', '/']
@@ -114,8 +104,7 @@ latex_to_list s l =
 
 data Tree a = Empty | Node (Tree a) a (Tree a)
 
-
-data Exp = Var
+data Exp = Var String
   | Plus Exp Exp
   | Times Exp Exp
   | Minus Exp Exp
@@ -123,6 +112,7 @@ data Exp = Var
   | Const Float
   | Pow Exp Exp
   | Factorial Exp
+  | Dummy
 
 check_possibilities :: String -> [String] -> Bool
 check_possibilities s l =
@@ -132,8 +122,99 @@ check_possibilities s l =
       if string_equality s x then True
       else check_possibilities s xs
 
-string_operators :: [String]
-string_operators = ["\\frac", "+", "-", "/", "*", "\\times"]
+correct_args :: Exp -> Int
+correct_args e =
+  case e of 
+    Times _ _ -> 2 
+    Plus _ _ -> 2
+    Div _ _ -> 2 
+    Minus _ _ -> 2 
+    Const _ -> 0
+    Pow _ _ -> 2
+    Factorial _ -> 1
+    _ -> 0 
 
-list_to_tree :: [String] -> Tree String -> Tree String
-list_to_tree l t = t
+data Stack = S String Stack | EmptyStack
+
+push :: String -> Stack -> Stack 
+push string stack = 
+  case stack of 
+    EmptyStack -> S string EmptyStack
+    S _ _ -> S string stack 
+
+pre_pop :: Stack -> Maybe (String)
+pre_pop s =
+  case s of 
+    EmptyStack -> Nothing
+    S head mini -> Just (head)
+
+pop :: Stack -> Stack
+pop s =
+  case s of 
+    EmptyStack -> EmptyStack
+    S head mini -> mini
+
+special_chars :: [Char]
+special_chars =
+  ['/', '+', ' ', '-', '*', '\\', '^', '_', '{', '}', '[', ']', '(', ')', '!']
+
+brackets :: [Char]
+brackets =
+  ['{', '}', '[', ']', '(', ')']
+
+brackets_string :: [String]
+brackets_string =
+  ["{", "}", "[", "]", "(", ")"]
+
+back_brackets =
+  ["}", "]", ")"]
+
+same_set :: String -> String -> Bool
+same_set s1 s2 = 
+ if ((string_equality s1 "{") && (string_equality s2 "}")) ||  
+  ((string_equality s1 "(") && (string_equality s2 ")")) ||
+  ((string_equality s1 "[") && (string_equality s2 "]")) 
+  then True 
+  else False
+
+brackets_valid :: [String] -> Stack -> Bool
+brackets_valid strings stack = 
+  case strings of 
+    [] -> 
+      case stack of 
+        EmptyStack -> True
+        S _  _-> False
+    x:xs -> 
+      if check_possibilities x brackets_string then 
+        case pre_pop stack of 
+          Nothing -> if check_possibilities x back_brackets then False else brackets_valid xs (push x stack)
+          Just (head) -> 
+            if same_set head x then
+              brackets_valid (xs) (pop stack)  
+            else (
+              if not (check_possibilities x back_brackets) then brackets_valid (xs) (push x stack)
+              else False
+            )
+        else 
+          brackets_valid xs stack
+
+find_corresponding :: String -> Exp
+find_corresponding "*" = Times Dummy Dummy
+find_corresponding "+" = Plus Dummy Dummy
+find_corresponding "/" = Div Dummy Dummy
+find_corresponding "^" = Pow Dummy Dummy
+find_corresponding "!" = Factorial Dummy
+
+string_operators :: [String]
+string_operators = ["\\frac", "+", "-", "/", "*", "\\times", "^", "!"]
+
+convert_to_Exp :: [String] -> Exp -> [Exp] -> [Exp] -> [Exp]
+convert_to_Exp s op_cache input_cache sc = 
+  case s of 
+    [] -> sc 
+    x:xs -> 
+      if (check_possibilities x string_operators)
+        then (
+          if correct_args (find_corresponding x) == length input_cache then 
+              sc else sc )
+        else sc

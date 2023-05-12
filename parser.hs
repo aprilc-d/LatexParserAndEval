@@ -15,12 +15,16 @@ import System.Exit
 import System.IO
 import Distribution.Simple.Command (OptDescr(BoolOpt))
 
+import Stack 
+import Expression
+import Tree
+
 main :: IO ()
 main =
   do {
     args <- getArgs
     ; if length args == 0 then print ("please put in an argument")
-    else print (brackets_valid (latex_to_list (combine args) [] ) EmptyStack)
+    else print (brackets_valid (latex_to_list (combine args) []) EmptyStack)
   }
 
 char_to_string :: Char -> String
@@ -102,18 +106,6 @@ latex_to_list s l =
     )
     )
 
-data Tree a = Empty | Node (Tree a) a (Tree a)
-
-data Exp = Var String
-  | Plus Exp Exp
-  | Times Exp Exp
-  | Minus Exp Exp
-  | Div Exp Exp
-  | Const Float
-  | Pow Exp Exp
-  | Factorial Exp
-  | Dummy
-
 check_possibilities :: String -> [String] -> Bool
 check_possibilities s l =
   case l of
@@ -121,38 +113,6 @@ check_possibilities s l =
     (x:xs) ->
       if string_equality s x then True
       else check_possibilities s xs
-
-correct_args :: Exp -> Int
-correct_args e =
-  case e of 
-    Times _ _ -> 2 
-    Plus _ _ -> 2
-    Div _ _ -> 2 
-    Minus _ _ -> 2 
-    Const _ -> 0
-    Pow _ _ -> 2
-    Factorial _ -> 1
-    _ -> 0 
-
-data Stack = S String Stack | EmptyStack
-
-push :: String -> Stack -> Stack 
-push string stack = 
-  case stack of 
-    EmptyStack -> S string EmptyStack
-    S _ _ -> S string stack 
-
-pre_pop :: Stack -> Maybe (String)
-pre_pop s =
-  case s of 
-    EmptyStack -> Nothing
-    S head mini -> Just (head)
-
-pop :: Stack -> Stack
-pop s =
-  case s of 
-    EmptyStack -> EmptyStack
-    S head mini -> mini
 
 special_chars :: [Char]
 special_chars =
@@ -177,13 +137,13 @@ same_set s1 s2 =
   then True 
   else False
 
-brackets_valid :: [String] -> Stack -> Bool
+brackets_valid :: [String] -> Stack String -> Bool
 brackets_valid strings stack = 
   case strings of 
     [] -> 
       case stack of 
         EmptyStack -> True
-        S _  _-> False
+        S _ _-> False
     x:xs -> 
       if check_possibilities x brackets_string then 
         case pre_pop stack of 
@@ -197,6 +157,13 @@ brackets_valid strings stack =
             )
         else 
           brackets_valid xs stack
+
+
+order_of_operations :: [String] -> [String]
+order_of_operations s =
+  case s of 
+    [] -> 
+    x:xs ->            
 
 find_corresponding :: String -> Exp
 find_corresponding "*" = Times Dummy Dummy

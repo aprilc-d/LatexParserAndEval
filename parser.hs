@@ -7,6 +7,8 @@
 {-# LANGUAGE BlockArguments #-}
 {-# HLINT ignore "Use list literal" #-}
 {-# OPTIONS_GHC -Wno-overlapping-patterns #-}
+{-# HLINT ignore "Use guards" #-}
+{-# HLINT ignore "Avoid lambda" #-}
 
 import Data.String
 import Data.List
@@ -15,7 +17,7 @@ import System.Exit
 import System.IO
 import Distribution.Simple.Command (OptDescr(BoolOpt))
 
-import Stack 
+import Stack
 import Expression
 import Tree
 
@@ -27,6 +29,33 @@ main =
     else print (brackets_valid (latex_to_list (combine args) []) EmptyStack)
   }
 
+
+-- constants for parsing --
+
+special_chars :: [Char]
+special_chars = ['/', '+', ' ', '-', '*', '\\', '^', '_', '{', '}', '[', ']', '(', ')', '!']
+
+brackets :: [Char]
+brackets = ['{', '}', '[', ']', '(', ')']
+
+brackets_string :: [String]
+brackets_string = ["{", "}", "[", "]", "(", ")"]
+
+front_brackets :: [String]
+front_brackets = ["{", "[", "("]
+
+back_brackets :: [String]
+back_brackets = ["}", "]", ")"]
+
+operators :: [Char]
+operators = ['+', '-', '*', '/']
+
+string_operators :: [String]
+string_operators = ["\\frac", "+", "-", "/", "*", "\\times", "^", "!"]
+
+
+-- basic functions for string manipulation --
+
 char_to_string :: Char -> String
 char_to_string c = c:[]
 
@@ -34,8 +63,8 @@ append_char :: Char -> String -> String
 append_char c s = s ++ (char_to_string c)
 
 combine :: [String] -> String
-combine l = 
-  case l of 
+combine l =
+  case l of
     [] -> ""
     x:xs -> x ++ (combine xs)
 
@@ -58,11 +87,60 @@ string_equality s1 s2 =
           )
   )
 
-operators :: [Char]
-operators = ['+', '-', '*', '/']
+
+-- helper functions --
+
+check_possibilities :: String -> [String] -> Bool
+check_possibilities s l =
+  case l of
+    [] -> False
+    (x:xs) ->
+      if string_equality s x then True
+      else check_possibilities s xs
+
+same_set :: String -> String -> Bool
+same_set s1 s2 =
+ if ((string_equality s1 "{") && (string_equality s2 "}")) ||
+  ((string_equality s1 "(") && (string_equality s2 ")")) ||
+  ((string_equality s1 "[") && (string_equality s2 "]"))
+  then True
+  else False
+
+reverse_bracket :: String -> String
+reverse_bracket s =
+  if (string_equality s "{") then "}"
+  else
+    if (string_equality s "(") then ")"
+    else
+      if (string_equality s "[") then "]"
+      else error "invalid arguement"
+
+check_for_front_brk :: [String] -> Bool
+check_for_front_brk [] = False
+check_for_front_brk (x:xs) =
+  if check_possibilities x front_brackets then True
+  else check_for_front_brk xs
+
+accumulate_ops :: [String] -> [String]
+accumulate_ops [] = []
+accumulate_ops (x:xs) =
+  if check_possibilities x string_operators then x:(accumulate_ops xs)
+  else accumulate_ops xs
+
+uniform_list :: [a] -> a -> Bool
+uniform_list [] _ = True
+unifrom_list (x:xs) y =
+  if x == y then unifrom_list xs y
+  else False
+
+add_front_brks :: [String] -> Int -> [String]
+add_front_brks l 0 = l
+add_front_brks (l) n = add_front_brks ("(":l) (n-1)
+
+
+-- parsing techniques --
 
 latex_to_list :: String -> [String] -> [String]
-
 latex_to_list s l =
   case s of
   [] -> l
@@ -98,90 +176,66 @@ latex_to_list s l =
         if length l == 0
           then latex_to_list xs ([(char_to_string x)])
           else (
-            if string_equality (last l) "" then 
+            if string_equality (last l) "" then
               latex_to_list xs (init l ++ [(char_to_string x)])
-              else 
+              else
                 latex_to_list xs (init l ++ [(append_char x (last l))])
           )
     )
     )
 
-check_possibilities :: String -> [String] -> Bool
-check_possibilities s l =
-  case l of
-    [] -> False
-    (x:xs) ->
-      if string_equality s x then True
-      else check_possibilities s xs
-
-special_chars :: [Char]
-special_chars =
-  ['/', '+', ' ', '-', '*', '\\', '^', '_', '{', '}', '[', ']', '(', ')', '!']
-
-brackets :: [Char]
-brackets =
-  ['{', '}', '[', ']', '(', ')']
-
-brackets_string :: [String]
-brackets_string =
-  ["{", "}", "[", "]", "(", ")"]
-
-back_brackets =
-  ["}", "]", ")"]
-
-same_set :: String -> String -> Bool
-same_set s1 s2 = 
- if ((string_equality s1 "{") && (string_equality s2 "}")) ||  
-  ((string_equality s1 "(") && (string_equality s2 ")")) ||
-  ((string_equality s1 "[") && (string_equality s2 "]")) 
-  then True 
-  else False
-
+-- uses a stack to ensure that the order of brackets is valid, otherwise the expression cannot be evaluated
 brackets_valid :: [String] -> Stack String -> Bool
-brackets_valid strings stack = 
-  case strings of 
-    [] -> 
-      case stack of 
+brackets_valid strings stack =
+  case strings of
+    [] ->
+      case stack of
         EmptyStack -> True
         S _ _-> False
-    x:xs -> 
-      if check_possibilities x brackets_string then 
-        case pre_pop stack of 
+    x:xs ->
+      if check_possibilities x brackets_string then
+        case pre_pop stack of
           Nothing -> if check_possibilities x back_brackets then False else brackets_valid xs (push x stack)
-          Just (head) -> 
+          Just (head) ->
             if same_set head x then
-              brackets_valid (xs) (pop stack)  
+              brackets_valid (xs) (pop stack)
             else (
               if not (check_possibilities x back_brackets) then brackets_valid (xs) (push x stack)
               else False
             )
-        else 
+        else
           brackets_valid xs stack
 
+order_of_operations :: [String] -> String -> [String] -> [String]
+order_of_operations [] current_brk ops = []
+order_of_operations input current_brk ops =
 
-order_of_operations :: [String] -> [String]
-order_of_operations s =
-  case s of 
-    [] -> 
-    x:xs ->            
+  -- no internal brackets 
+  if not (check_for_front_brk input) then
 
-find_corresponding :: String -> Exp
-find_corresponding "*" = Times Dummy Dummy
-find_corresponding "+" = Plus Dummy Dummy
-find_corresponding "/" = Div Dummy Dummy
-find_corresponding "^" = Pow Dummy Dummy
-find_corresponding "!" = Factorial Dummy
+    -- if all have same precedence add brackets from left to right
+    if 
+      uniform_list 
+        (map (\a -> precedence (find_corresponding a)) (accumulate_ops input)) 
+        (head (map (\a -> precedence (find_corresponding a)) (accumulate_ops input)))
 
-string_operators :: [String]
-string_operators = ["\\frac", "+", "-", "/", "*", "\\times", "^", "!"]
+      then
+        --adding front brackets equal to the number of operators
+        add_front_brks input (length (accumulate_ops input))
+
+    else []
+
+
+  else []
+
 
 convert_to_Exp :: [String] -> Exp -> [Exp] -> [Exp] -> [Exp]
-convert_to_Exp s op_cache input_cache sc = 
-  case s of 
-    [] -> sc 
-    x:xs -> 
+convert_to_Exp s op_cache input_cache sc =
+  case s of
+    [] -> sc
+    x:xs ->
       if (check_possibilities x string_operators)
         then (
-          if correct_args (find_corresponding x) == length input_cache then 
+          if correct_args (find_corresponding x) == length input_cache then
               sc else sc )
         else sc

@@ -20,13 +20,19 @@ import Distribution.Simple.Command (OptDescr(BoolOpt))
 import Stack
 import Expression
 import Tree
+import StringFunctions
 
 main :: IO ()
 main =
   do {
     args <- getArgs
     ; if length args == 0 then print ("please put in an argument")
-    else print (brackets_valid (latex_to_list (combine args) []) EmptyStack)
+    else print (
+      --order_of_operations (latex_to_list (combine args)) [] (accumulate_ops (latex_to_list (combine args)))
+      map (\a -> precedence (find_corresponding a)) (accumulate_ops (latex_to_list (combine args)))
+        --latex_to_list (combine args)
+        )
+    
   }
 
 
@@ -48,55 +54,10 @@ back_brackets :: [String]
 back_brackets = ["}", "]", ")"]
 
 operators :: [Char]
-operators = ['+', '-', '*', '/']
+operators = ['+', '-', '*', '/', '^', '!']
 
 string_operators :: [String]
 string_operators = ["\\frac", "+", "-", "/", "*", "\\times", "^", "!"]
-
-
--- basic functions for string manipulation --
-
-char_to_string :: Char -> String
-char_to_string c = c:[]
-
-append_char :: Char -> String -> String
-append_char c s = s ++ (char_to_string c)
-
-combine :: [String] -> String
-combine l =
-  case l of
-    [] -> ""
-    x:xs -> x ++ (combine xs)
-
-string_equality :: String -> String -> Bool
-string_equality s1 s2 =
-  if length s1 /= length s2 then False
-  else (
-    case s1 of
-      [] -> (
-        case s2 of
-          [] -> True
-          (x:xs) -> False
-          )
-      (x:xs) -> (
-        case s2 of
-          [] -> True
-          (y:ys) ->
-            if y /= x then False
-            else string_equality xs ys
-          )
-  )
-
-
--- helper functions --
-
-check_possibilities :: String -> [String] -> Bool
-check_possibilities s l =
-  case l of
-    [] -> False
-    (x:xs) ->
-      if string_equality s x then True
-      else check_possibilities s xs
 
 same_set :: String -> String -> Bool
 same_set s1 s2 =
@@ -127,21 +88,40 @@ accumulate_ops (x:xs) =
   if check_possibilities x string_operators then x:(accumulate_ops xs)
   else accumulate_ops xs
 
-uniform_list :: [a] -> a -> Bool
-uniform_list [] _ = True
-unifrom_list (x:xs) y =
-  if x == y then unifrom_list xs y
-  else False
+uniform_list :: [Int] -> Int -> Bool
+uniform_list [] n = True
+unifrom_list (x:xs) n = if x == n then unifrom_list xs n else False
+
+
+
 
 add_front_brks :: [String] -> Int -> [String]
 add_front_brks l 0 = l
 add_front_brks (l) n = add_front_brks ("(":l) (n-1)
 
+add_back_brks_equal_prec :: [String] -> [String] -> [String]
+add_back_brks_equal_prec [] [] = []
+add_back_brks_equal_prec [] _ = error "invalid arguments"
+add_back_brks_equal_prec input [] = input 
+add_back_brks_equal_prec (x:xs) (op:ops) = 
+  if string_equality op x then ( 
+    case x of 
+      "\\frac" -> []
+      "+" -> x:")":(add_back_brks_equal_prec xs ops)
+      "-" -> x:")":(add_back_brks_equal_prec xs ops) 
+      "/" -> x:")":(add_back_brks_equal_prec xs ops) 
+      "*" -> x:")":(add_back_brks_equal_prec xs ops) 
+      "\\times" -> x:")":(add_back_brks_equal_prec xs ops) 
+      "^" -> x:")":(add_back_brks_equal_prec xs ops)
+      "!" -> x:")":(add_back_brks_equal_prec xs ops)
+    )
+
+    else add_back_brks_equal_prec xs ops
 
 -- parsing techniques --
 
-latex_to_list :: String -> [String] -> [String]
-latex_to_list s l =
+latex_to_list_helper :: String -> [String] -> [String]
+latex_to_list_helper s l =
   case s of
   [] -> l
   (x:xs) ->
@@ -150,39 +130,42 @@ latex_to_list s l =
       if x `elem` special_chars then (
 
       if (x `elem` operators || x `elem` brackets) then
-        latex_to_list xs ((init l) ++ [append_char x (last l)]++[""])
+        latex_to_list_helper xs ((init l) ++ [append_char x (last l)]++[""])
 
       else
-        if x == ' ' then latex_to_list xs l
-        else latex_to_list xs ((init l) ++ [(append_char '\\' (last l))])
+        if x == ' ' then latex_to_list_helper xs l
+        else latex_to_list_helper xs ((init l) ++ [(append_char '\\' (last l))])
     )
     else
-      latex_to_list xs ((init l) ++ [(append_char x (last l))])
+      latex_to_list_helper xs ((init l) ++ [(append_char x (last l))])
     )
 
     else (
     if x `elem` special_chars then (
 
         if (x `elem` operators || x `elem` brackets) then
-          latex_to_list xs (l ++ [char_to_string x]++[""])
+          latex_to_list_helper xs (l ++ [char_to_string x]++[""])
 
         else (
-          if x == ' ' then latex_to_list xs (l ++ [""])
-          else latex_to_list xs (l ++ ["\\"])
+          if x == ' ' then latex_to_list_helper xs (l ++ [""])
+          else latex_to_list_helper xs (l ++ ["\\"])
         )
       )
 
       else (
         if length l == 0
-          then latex_to_list xs ([(char_to_string x)])
+          then latex_to_list_helper xs ([(char_to_string x)])
           else (
             if string_equality (last l) "" then
-              latex_to_list xs (init l ++ [(char_to_string x)])
+              latex_to_list_helper xs (init l ++ [(char_to_string x)])
               else
-                latex_to_list xs (init l ++ [(append_char x (last l))])
+                latex_to_list_helper xs (init l ++ [(append_char x (last l))])
           )
     )
     )
+
+latex_to_list :: String -> [String]
+latex_to_list s = latex_to_list_helper s []
 
 -- uses a stack to ensure that the order of brackets is valid, otherwise the expression cannot be evaluated
 brackets_valid :: [String] -> Stack String -> Bool
@@ -221,7 +204,9 @@ order_of_operations input current_brk ops =
 
       then
         --adding front brackets equal to the number of operators
-        add_front_brks input (length (accumulate_ops input))
+        add_back_brks_equal_prec 
+        (add_front_brks input (length (accumulate_ops input)))
+        (accumulate_ops input)
 
     else []
 

@@ -45,13 +45,3 @@ module Expression where
             Infinite_Product _ -> 3
             Infinite_Sum _ -> 3
             _ -> error "invalid arguement precedence :: Exp -> Int"
-
-    find_corresponding :: String -> Exp
-    find_corresponding s = 
-        if 
-    find_corresponding "*" = Times Dummy Dummy
-    find_corresponding "+" = Plus Dummy Dummy
-    find_corresponding "/" = Div Dummy Dummy
-    find_corresponding "^" = Pow Dummy Dummy
-    find_corresponding "!" = Factorial Dummy
-

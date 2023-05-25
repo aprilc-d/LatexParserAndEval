@@ -21,6 +21,7 @@ module Parser where
   import Expression
   import Tree
   import StringFunctions
+  import ListFunctions 
 
   -- constants for parsing --
 
@@ -67,28 +68,6 @@ module Parser where
                   else
                     Times Dummy Dummy
     )))))))
- 
-
-  --checks if a front bracket pairs with a given back bracket
-  same_set :: String -> String -> Bool
-  same_set s1 s2 =
-    if ((string_equality s1 "{") && (string_equality s2 "}")) ||
-      ((string_equality s1 "(") && (string_equality s2 ")")) ||
-      ((string_equality s1 "[") && (string_equality s2 "]"))
-      then True
-
-    else False
-
-  --returns the corresponding back bracket given a front bracket
-  reverse_bracket :: String -> String
-  reverse_bracket s =
-    if (string_equality s "{") then "}"
-    else
-      if (string_equality s "(") then ")"
-      else
-        if (string_equality s "[") then "]"
-        --with any other input, throws an exception
-        else error "invalid arguement"
 
   --checks if a set of brackets contains a front bracket
   check_for_front_brk :: [String] -> Bool
@@ -104,56 +83,55 @@ module Parser where
     if check_possibilities x string_operators then x:(accumulate_ops xs)
     else accumulate_ops xs
 
-  --helper function
-  uniform_list_helper :: [Int] -> Int -> Bool
-  --if list is empty it is uniform
-  uniform_list_helper [] _ = True
-  --if head of list is n then, call on sublist, if not false
-  uniform_list_helper (x:xs) n = 
-    if x == n then uniform_list_helper xs x
-    else False
-
-  --returns true if a list contains all identical values
-  uniform_list :: [Int] -> Bool
-  uniform_list [] = False
-  uniform_list l = uniform_list_helper l (head l)
-
-
   add_front_brks_helper :: [String] -> Int -> [String]
   add_front_brks_helper l 0 = l
   add_front_brks_helper (l) n = add_front_brks_helper ("(":l) (n-1)
 
   add_front_brks :: [String] -> [String]
-  add_front_brks l = add_front_brks_helper l (length l)
+  add_front_brks l = add_front_brks_helper l (length (accumulate_ops l))
 
   add_back_brks_equal_prec_helper :: [String] -> [String] -> [String]
   add_back_brks_equal_prec_helper [] [] = []
-  add_back_brks_equal_prec_helper [] _ = error "invalid arguments"
+  add_back_brks_equal_prec_helper [] _ = error "invalid argument"
   add_back_brks_equal_prec_helper input [] = input 
   add_back_brks_equal_prec_helper (x:xs) (op:ops) = 
-    if not (check_possibilities x string_operators) then error "invalid argument"
+    if not (check_possibilities x string_operators) then x:(add_back_brks_equal_prec_helper xs (op:ops))
     else (
-      if string_equality x "+" then []
+      if string_equality x "+" then 
+        case xs of 
+          y:ys -> x:y:(")"):(add_back_brks_equal_prec_helper ys ops)
+          [] -> error "invalid argument"
       else (
-        if string_equality x "-" then []
+        if string_equality x "-" then 
+          case xs of 
+            y:ys -> x:y:(")"):(add_back_brks_equal_prec_helper ys ops)
+            [] -> error "invalid argument"
         else (
-          if string_equality x "/" then  []
+          if string_equality x "/" then 
+            case xs of 
+              y:ys -> x:y:(")"):(add_back_brks_equal_prec_helper ys ops)
+              [] -> error "invalid argument"
           else (
-            if string_equality x "*" then []
+            if string_equality x "*" then 
+              case xs of 
+                y:ys -> x:y:(")"):(add_back_brks_equal_prec_helper ys ops)
+                [] -> error "invalid argument"
             else (
-              if string_equality x "!" then []
+              if string_equality x "!" then 
+                x:(")"):(add_back_brks_equal_prec_helper xs ops)
               else (
-                if string_equality x "^" then []
+                if string_equality x "^" then 
+                  case xs of 
+                    y:ys -> x:y:(")"):(add_back_brks_equal_prec_helper ys ops)
+                    [] -> error "invalid argument"
                 else (
                   if string_equality x "\\frac" then []
                   else
                     []
     )))))))
  
-
   add_back_brks_equal_prec :: [String] -> [String]
   add_back_brks_equal_prec input = add_back_brks_equal_prec_helper input (accumulate_ops input)
-
 
   -- parsing techniques --
 
@@ -255,8 +233,9 @@ module Parser where
 
           then
             --adding front brackets equal to the number of operators 
-              add_front_brks input 
-        
+              add_back_brks_equal_prec (add_front_brks input)
+    
+        -- the precedence of operators is not equal
         else []
 
 

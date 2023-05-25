@@ -3,7 +3,8 @@
 {-# HLINT ignore "Use camelCase" #-}
 {-# HLINT ignore "Use list literal" #-}
 {-# HLINT ignore "Redundant bracket" #-}
-module StringFunctions where 
+{-# HLINT ignore "Use guards" #-}
+module StringFunctions where
 
     char_to_string :: Char -> String
     char_to_string c = c:[]
@@ -43,3 +44,24 @@ module StringFunctions where
             (x:xs) ->
                 if string_equality s x then True
                 else check_possibilities s xs
+
+    --checks if a front bracket pairs with a given back bracket
+    same_set :: String -> String -> Bool
+    same_set s1 s2 =
+        if ((string_equality s1 "{") && (string_equality s2 "}")) ||
+        ((string_equality s1 "(") && (string_equality s2 ")")) ||
+        ((string_equality s1 "[") && (string_equality s2 "]"))
+        then True
+
+        else False
+
+    --returns the corresponding back bracket given a front bracket
+    reverse_bracket :: String -> String
+    reverse_bracket s =
+        if (string_equality s "{") then "}"
+        else
+            if (string_equality s "(") then ")"
+            else
+                if (string_equality s "[") then "]"
+                --with any other input, throws an exception
+                else error "invalid arguement"

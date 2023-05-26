@@ -23,118 +23,9 @@ module Parser where
   import StringFunctions
   import ListFunctions 
 
-  -- constants for parsing --
+  -- parsing --
 
-  special_chars :: [Char]
-  special_chars = ['/', '+', ' ', '-', '*', '\\', '^', '_', '{', '}', '[', ']', '(', ')', '!']
-
-  brackets :: [Char]
-  brackets = ['{', '}', '[', ']', '(', ')']
-
-  brackets_string :: [String]
-  brackets_string = ["{", "}", "[", "]", "(", ")"]
-
-  front_brackets :: [String]
-  front_brackets = ["{", "[", "("]
-
-  back_brackets :: [String]
-  back_brackets = ["}", "]", ")"]
-
-  operators :: [Char]
-  operators = ['+', '-', '*', '/', '^', '!']
-
-  string_operators :: [String]
-  string_operators = ["\\frac", "+", "-", "/", "*", "\\times", "^", "!"]
-
-  -- helper functions --
-
-  find_corresponding :: String -> Exp 
-  find_corresponding s = 
-    if not (check_possibilities s string_operators) then error "invalid argument"
-    else (
-      if string_equality s "+" then Plus Dummy Dummy
-      else (
-        if string_equality s "-" then Minus Dummy Dummy
-        else (
-          if string_equality s "/" then  Div Dummy Dummy
-          else (
-            if string_equality s "*" then Times Dummy Dummy
-            else (
-              if string_equality s "!" then Factorial Dummy
-              else (
-                if string_equality s "^" then Pow Dummy Dummy 
-                else (
-                  if string_equality s "\\frac" then Div Dummy Dummy 
-                  else
-                    Times Dummy Dummy
-    )))))))
-
-  --checks if a set of brackets contains a front bracket
-  check_for_front_brk :: [String] -> Bool
-  check_for_front_brk [] = False
-  check_for_front_brk (x:xs) =
-    if check_possibilities x front_brackets then True
-    else check_for_front_brk xs
-
-  --accumulates all operators in a list and returns the operators
-  accumulate_ops :: [String] -> [String]
-  accumulate_ops [] = []
-  accumulate_ops (x:xs) =
-    if check_possibilities x string_operators then x:(accumulate_ops xs)
-    else accumulate_ops xs
-
-  add_front_brks_helper :: [String] -> Int -> [String]
-  add_front_brks_helper l 0 = l
-  add_front_brks_helper (l) n = add_front_brks_helper ("(":l) (n-1)
-
-  add_front_brks :: [String] -> [String]
-  add_front_brks l = add_front_brks_helper l (length (accumulate_ops l))
-
-  add_back_brks_equal_prec_helper :: [String] -> [String] -> [String]
-  add_back_brks_equal_prec_helper [] [] = []
-  add_back_brks_equal_prec_helper [] _ = error "invalid argument"
-  add_back_brks_equal_prec_helper input [] = input 
-  add_back_brks_equal_prec_helper (x:xs) (op:ops) = 
-    if not (check_possibilities x string_operators) then x:(add_back_brks_equal_prec_helper xs (op:ops))
-    else (
-      if string_equality x "+" then 
-        case xs of 
-          y:ys -> x:y:(")"):(add_back_brks_equal_prec_helper ys ops)
-          [] -> error "invalid argument"
-      else (
-        if string_equality x "-" then 
-          case xs of 
-            y:ys -> x:y:(")"):(add_back_brks_equal_prec_helper ys ops)
-            [] -> error "invalid argument"
-        else (
-          if string_equality x "/" then 
-            case xs of 
-              y:ys -> x:y:(")"):(add_back_brks_equal_prec_helper ys ops)
-              [] -> error "invalid argument"
-          else (
-            if string_equality x "*" then 
-              case xs of 
-                y:ys -> x:y:(")"):(add_back_brks_equal_prec_helper ys ops)
-                [] -> error "invalid argument"
-            else (
-              if string_equality x "!" then 
-                x:(")"):(add_back_brks_equal_prec_helper xs ops)
-              else (
-                if string_equality x "^" then 
-                  case xs of 
-                    y:ys -> x:y:(")"):(add_back_brks_equal_prec_helper ys ops)
-                    [] -> error "invalid argument"
-                else (
-                  if string_equality x "\\frac" then []
-                  else
-                    []
-    )))))))
- 
-  add_back_brks_equal_prec :: [String] -> [String]
-  add_back_brks_equal_prec input = add_back_brks_equal_prec_helper input (accumulate_ops input)
-
-  -- parsing techniques --
-
+  --coverts input from command line into a list of operators and operands
   latex_to_list_helper :: String -> [String] -> [String]
   latex_to_list_helper s l =
     case s of
@@ -225,22 +116,26 @@ module Parser where
   order_of_operations_helper [] current_brk ops = []
   order_of_operations_helper input current_brk ops =
     -- no internal brackets 
-    if not (check_for_front_brk input) then
+    if not (check_for_front_brk input) then (
       -- if all have same precedence add brackets from left to right
-        if
-          uniform_list 
-            (map (\a -> precedence (find_corresponding a)) (accumulate_ops input)) 
-
+        if uniform_list (precedence_list input)
           then
             --adding front brackets equal to the number of operators 
               add_back_brks_equal_prec (add_front_brks input)
     
-        -- the precedence of operators is not equal
-        else []
+        -- the precedence of operators is not equal (one is largest)
+        else (
+          if (occurs (precedence_list input) (find_largest (precedence_list input))) == 1
+            then []
 
+          else []
+        ))
 
+    -- there are internal brackets 
     else []
 
+  --add brackets which would be inferred by humans
+  --so that multiplication happens before addition etc
   order_of_operations :: [String] -> [String]
   order_of_operations input = order_of_operations_helper input "" (accumulate_ops input)
 

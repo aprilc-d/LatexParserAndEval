@@ -10,6 +10,7 @@ module StringFunctions where
     -- imports --
 
     import Expression
+    import Stack
 
     -- constants for parsering are string functions --
 
@@ -97,6 +98,33 @@ module StringFunctions where
                 if (string_equality s "[") then "]"
                 --with any other input, throws an exception
                 else error "invalid arguement"
+   
+    internal_brackets_skipper :: [String] -> [String]
+    internal_brackets_skipper [] = []
+    internal_brackets_skipper l = go l EmptyStack False 
+        where 
+            go :: [String] -> Stack String -> Bool -> [String] 
+            go [] (S head mini) b = error "invalid brackets"
+            go l EmptyStack True = l 
+            go [] EmptyStack b = []
+            go (x:xs) EmptyStack False = 
+                if check_possibilities x front_brackets then 
+                    go xs (S x EmptyStack) True
+                else (
+                    if check_possibilities x back_brackets then error "invalid brackets"
+                    else go xs EmptyStack False
+                )
+            go (x:xs) (S head mini) True = 
+                if check_possibilities x front_brackets then go xs (S x (S head mini)) True
+                else (
+                    if check_possibilities x back_brackets && same_set head x then go xs mini True
+                    else (
+                        if check_possibilities x back_brackets && not (same_set head x) then error "invalid brackets"
+                        else 
+                            go xs (S head mini) True
+                    )
+                )
+            go _ _ _ = error "invalid arguments"
 
     --checks if a set of brackets contains a front bracket
     check_for_front_brk :: [String] -> Bool
@@ -113,67 +141,72 @@ module StringFunctions where
     accumulate_ops [] = []
     accumulate_ops (x:xs) =
         if check_possibilities x string_operators then x:(accumulate_ops xs)
-        else accumulate_ops xs
+        else (
+            if check_possibilities x front_brackets then accumulate_ops (internal_brackets_skipper (x:xs))
+            else accumulate_ops xs
+        )
 
     precedence_list :: [String] -> [Int]
     precedence_list l = 
         (map (\a -> precedence (find_corresponding a)) (accumulate_ops l)) 
 
-    add_front_brks_helper :: [String] -> Int -> [String]
-    add_front_brks_helper l 0 = l
-    add_front_brks_helper (l) n = add_front_brks_helper ("(":l) (n-1)
-
     add_front_brks :: [String] -> [String]
-    add_front_brks l = add_front_brks_helper l (length (accumulate_ops l))
+    add_front_brks l = go l (length (accumulate_ops l))
+        where
+            go :: [String] -> Int -> [String]
+            go l 0 = l
+            go l n = go ("(":l) (n-1)
 
-    add_back_brks_equal_prec_helper :: [String] -> [String] -> [String]
-    add_back_brks_equal_prec_helper [] [] = []
-    add_back_brks_equal_prec_helper [] _ = error "invalid argument"
-    add_back_brks_equal_prec_helper input [] = input 
-    add_back_brks_equal_prec_helper (x:xs) (op:ops) = 
-        if not (check_possibilities x string_operators) then x:(add_back_brks_equal_prec_helper xs (op:ops))
-        else (
-            if string_equality x "+" then 
-                case xs of 
-                    y:ys -> x:y:(")"):(add_back_brks_equal_prec_helper ys ops)
-                    [] -> error "invalid argument"
+    add_back_brks_equal_prec :: [String] -> [String]
+    add_back_brks_equal_prec input = go input (accumulate_ops input)
+        where 
+            go :: [String] -> [String] -> [String]
+            go [] [] = [] 
+            go [] _ = error "invalid argument"
+            go input [] = input 
+            go (x:xs) (op:ops) = 
+                if (not (check_possibilities x string_operators)) 
+                    then x:(go xs (op:ops))
 
-            else (
-                if string_equality x "-" then 
+                else (
+                if string_equality x "+" then 
                     case xs of 
-                        y:ys -> x:y:(")"):(add_back_brks_equal_prec_helper ys ops)
+                        y:ys -> x:y:(")"):(go ys ops)
                         [] -> error "invalid argument"
 
                 else (
-                    if string_equality x "/" then 
+                    if string_equality x "-" then 
                         case xs of 
-                            y:ys -> x:y:(")"):(add_back_brks_equal_prec_helper ys ops)
+                            y:ys -> x:y:(")"):(go ys ops)
                             [] -> error "invalid argument"
 
                     else (
-                        if string_equality x "*" then 
+                        if string_equality x "/" then 
                             case xs of 
-                                y:ys -> x:y:(")"):(add_back_brks_equal_prec_helper ys ops)
+                                y:ys -> x:y:(")"):(go ys ops)
                                 [] -> error "invalid argument"
 
                         else (
-                            if string_equality x "!" then 
-                                x:(")"):(add_back_brks_equal_prec_helper xs ops)
+                            if string_equality x "*" then 
+                                case xs of 
+                                    y:ys -> x:y:(")"):(go ys ops)
+                                    [] -> error "invalid argument"
 
                             else (
-                                if string_equality x "^" then 
-                                    case xs of 
-                                        y:ys -> x:y:(")"):(add_back_brks_equal_prec_helper ys ops)
-                                        [] -> error "invalid argument"
+                                if string_equality x "!" then 
+                                    x:(")"):(go xs ops)
 
                                 else (
-                                    if string_equality x "\\frac" then []
-                                    else []
+                                    if string_equality x "^" then 
+                                        case xs of 
+                                            y:ys -> x:y:(")"):(go ys ops)
+                                            [] -> error "invalid argument"
 
-        )))))))
- 
-    add_back_brks_equal_prec :: [String] -> [String]
-    add_back_brks_equal_prec input = add_back_brks_equal_prec_helper input (accumulate_ops input)
+                                    else (
+                                        if string_equality x "\\frac" then []
+                                        else []
+
+                )))))))
 
     find_corresponding :: String -> Exp 
     find_corresponding s = 

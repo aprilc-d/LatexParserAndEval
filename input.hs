@@ -20,9 +20,10 @@ main =
         args <- getArgs;
         if null args then print ("please put in an argument")
         else print (
-            order_of_operations (latex_to_list (combine args))
+            --order_of_operations (latex_to_list (combine args))
             --check_for_front_brk (latex_to_list (combine args))
             --uniform_list (map (\a -> precedence (find_corresponding a)) (accumulate_ops (latex_to_list (combine args)))) 
             --uniform_list (map (\a -> precedence (find_corresponding a)) (accumulate_ops (latex_to_list (combine args))))
-            --latex_to_list (combine args)
+            --accumulate_ops (latex_to_list (combine args))
+            add_front_brks (latex_to_list (combine args))
     )}
